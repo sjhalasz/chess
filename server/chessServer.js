@@ -36,7 +36,7 @@ Meteor.methods({
           user: user
         }}
       );
-    //console.log("heartbeat " + secretId + " " + user + " " + lastSeen);
+    // console.log("heartbeat " + secretId + " " + user + " " + lastSeen);
     }
   },
   // offer a game to another user
@@ -47,22 +47,27 @@ Meteor.methods({
     user = user ? user.username : "";
     var session = Sessions.findOne(sessionId);
     if(session && secretId == session.secretId) {
-      Offers.remove({"sessionId": sessionId}); // remove any previous offers by me
+      var gameId = null;
+      var offerTo = null;      
+      var offerFrom = null;
+      var otherSession = Sessions.findOne(otherId);
       // first see if the other user has an offer to me;
       // if so, start the game
-      var pair = Offers.findOne({"sessionId": otherId, "otherId": sessionId});
-      var gameId = null;
-      if(pair) { // yes we have a match, begin play
-        Offers.remove(pair._id); // remove partner's offer
+      //var pair = Offers.findOne({"sessionId": otherId, "otherId": sessionId});
+      // console.log("other session offer to " + otherSession.offerTo);
+      // console.log("my session id          " + sessionId);
+      if(otherSession.offerTo == sessionId) { // yes we have a match, begin play
+        // remove all my and other's offers
+       
         var white, wname, black, bname;
         if(0 == Math.floor(2 * Math.random())) { 
           white = sessionId; 
           wname = user; 
-          black = pair.sessionId; 
-          bname = pair.user;
+          black = otherSession._id; 
+          bname = otherSession.user;
         } else {
-          white = pair.sessionId;
-          wname = pair.user; 
+          white = otherSession._id;
+          wname = otherSession.user; 
           black = sessionId;
           bname = user;
         }
@@ -76,35 +81,35 @@ Meteor.methods({
           "bname": bname,
           "turn" : white,
           "fen"  : chess.fen(),
-          "pgn"  : chess.pgn(),
           "ascii": chess.ascii(),
-          "wtime": 7 * 60,
-          "btime": 7 * 60,
-          "ctime": (new Date()).getTime()
+          "wtime": 1000 * 10 * 60,
+          "btime": 1000 * 10 * 60,
+          "ctime": (new Date()).getTime(),
+          "moves": [], 
+          "score": ""
         });
       } else {
-        Offers.insert({
-          sessionId: sessionId,
-          user: user,
-          otherId: otherId
-        });
+        offerTo = otherId;
+        offerFrom = sessionId;
       }
       Sessions.update(
         sessionId, 
         {$set: {
-          gameId: gameId
+          gameId: gameId,
+          offerTo: offerTo
         }},
         function(err, cnt) {
-          //console.log("set gameid " + cnt);
+          // console.log("set gameid " + cnt);
         }
       );
       Sessions.update(
         otherId, 
         {$set: {
-          gameId: gameId
+          gameId: gameId,
+          offerFrom: offerFrom
         }},
         function(err, cnt) {
-          //console.log("set gameid " + cnt);
+          // console.log("set gameid " + cnt);
         }
       );
     } // end of if
@@ -116,48 +121,140 @@ Meteor.methods({
     if(session && secretId == session.secretId) {
       var game = Games.findOne(session.gameId);
       var chess = new Chess(game.fen);
-      var next = game.turn == game.white ? game.black : game.white;
-      if(chess.move(move)) {
-        Games.update(
-          game._id,
-          {$set: {
-            "fen"  : chess.fen(),
-            "pgn"  : chess.pgn(),
-            "ascii": chess.ascii(),
-            "turn" : next,
-            "message": ""
-          }},
-          function(err, cnt) {
-            //console.log("move " + cnt);
+      var ctime = (new Date()).getTime();
+      var etime = ctime - game.ctime;
+      var wtime = game.wtime;
+      var btime = game.btime;
+      if(game.turn == game.white) {
+        wtime = wtime - etime;
+      } else {
+        btime = btime - etime
+      }
+      var score = "";
+      if(0 > wtime + 1000) { // white time default with 1 second grace period
+        score = "0-1";
+        sendAlert(white, black, "Black wins due to white time default.");
+      }
+      if(0 > btime + 1000) { // black time default with 1 second grace period
+        score = "1-0";
+        sendAlert(white, black, "White wins due to black time default.");
+      }
+      wtime = Math.max(60000, wtime);
+      btime = Math.max(60000, btime);
+      if(score) {
+          gameEnd(game, score);
+      } else {
+        if(chess.move(move)) {
+          var moves = game.moves;
+          moves.push(move);
+          var turn = game.turn == game.white ? game.black : game.white;
+          Games.update(
+            game._id,
+            {$set: {
+              "fen"  : chess.fen(),
+              "ascii": chess.ascii(),
+              "turn" : turn,
+              "wtime": wtime,
+              "btime": btime,
+              "ctime": ctime,
+              "message": "",
+              "moves": moves
+            }},
+            function(err, cnt) {
+              // console.log("move " + cnt);
+            }
+          );
+          // console.log("move " + move);
+          if(chess.game_over()) { // if game ended with this move...
+            score = "½-½";
+            var alert = "Draw due to ";
+            if(chess.in_checkmate()) { // side to move is in checkmate
+              score = (turn == white) ? "0-1" : "1-0";
+              alert = ((turn == white) ? "White" : "Black") + " is in checkmate."
+            }
+            else if(chess.in_stalemate()) {
+              alert += "stalemate."
+            }
+            else if(chess.in_threefold_repetition()) {
+              alert += "threefold repetition."
+            }
+            else if(chess.insufficient_material()) {
+              alert += "insufficient material."
+            }
+            else if(chess.in_draw()) { // 50 move rule
+              alert += "50 move rule."
+            }
+            gameEnd(game, score);
+            sendAlert(white, black, alert);
           }
-        );
-        //console.log("move " + move);
-      } else { // invalid move
-         Games.update(
-           game._id,
-           {$set: {
-             "message": "Invalid move."
-           }}
-         );
-         console.log("message " + "Invalid Move.");
+        } else { // invalid move
+           Games.update(
+             game._id,
+             {$set: {
+               "message": "Invalid move."
+             }}
+           );
+           // console.log("message " + "Invalid Move.");
+        } // end of if(chess.move
+      } // end of if(score
+    } // end of if(session
+  },
+  "resign": function(sessionId, secretId){
+    var session = Sessions.findOne(sessionId);
+    if(session && secretId == session.secretId) {
+      var game = Games.findOne(session.gameId);
+      if(game.turn == game.white) {
+        gameEnd(game, "0-1");
+        sendAlert(game.white, game.black, "White resigns.");
+      } else {
+        gameEnd(game, "1-0");
+        sendAlert(game.white, game.black, "Black resigns.");
       }
     }
   },
-  "resign": function(session_id, gameId){
-    // validate session_id for gameId, and if valid, resign this user for this game
+  "cancelAlert": function(sessionId) {
+    Sessions.update(
+      sessionId,
+      {$set: {alert: ""}}
+    );
   }
 });
 
-// clean up dead sessions after 6 seconds
+var sendAlert = function(sessionId1, sessionId2, message) {
+  Sessions.update(
+    sessionId1,
+    {$set: {alert: message}}
+  );
+  Sessions.update(
+    sessionId2,
+    {$set: {alert: message}}
+  );
+};
+
+var gameEnd = function(game, score) {
+  Games.update(
+    game._id,
+    {$set: {
+      "active": false,
+      "score": score
+    }},
+    function(err, cnt) {
+      // console.log("gameEnd " + cnt);
+    }
+  );
+};
+
+// clean up dead sessions after 3 seconds
 Meteor.setInterval(
   function () {
     var now = (new Date()).getTime();
     Sessions.find({
-      "lastSeen": {$lt: (now - 6 * 1000)}
+      "lastSeen": {$lt: (now - 3 * 1000)}
     }).forEach(
       function (session) {
         // deactivate idle session
-        console.log("removing session " + session.secretId);
+        // console.log("removing session " + session.secretId);
+        Games.update(session.gameId, {$set: {active: false}});
         Sessions.remove(session._id);
     }); 
   }, // end of setInterval function argument

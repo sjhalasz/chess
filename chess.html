@@ -13,6 +13,7 @@
 <template name="main">
   {{! calls the login package control for creating account or logging in, and displays user name}}
   <h1>Welcome to Meteor Chess, {{>loginButtons}}!</h1> 
+  <div style="font-size:24px;color:red">{{alert}}</div>
   {{#if currentUser}} 
     {{#if inGame}} {{! if in a game, use inGame template}}
       {{>inGameTemplate}}
@@ -31,22 +32,32 @@
 </template>
 
 <template name="gameTemplate">
-      {{bname}}<br />
-      {{#if ismyid black}}
-        {{#if ismyid turn}}
-          <input> {{message}}<br />
+      {{bname}} 
+      {{#if equals black turn}}
+        {{{countdown btime ctime}}}
+        {{#if equals myid turn}} 
+          <br />
+          <input> {{message}}
         {{/if}}
+      {{else}}
+        {{roundSeconds btime}}
       {{/if}}
-      <code>
+      <br />
+      <code style="font-size:24px">
       {{{nl2brnbsp ascii}}}
       </code>
       <br />
-      {{wname}}<br />
-      {{#if ismyid white}}
-        {{#if ismyid turn}}
-          <input> {{message}}<br /> 
+      {{wname}} 
+      {{#if equals white turn}}
+        {{{countdown wtime ctime}}}
+        {{#if equals myid turn}} 
+          <br />
+          <input> {{message}}
         {{/if}}
+      {{else}}
+        {{roundSeconds wtime}}
       {{/if}}
+      <br />
       <button class="resign">Resign</button>
 </template>
 
@@ -58,7 +69,7 @@
 </template>
 
 <template name="userTemplate">
-  <li>{{user}}</li>
+  <li style="color:{{#if offerTo}} red {{else}} {{#if offerFrom}} green {{else}} black {{/if}}{{/if}}">{{user}}</li>
 </template>
 
 <template name="notLoggedInTemplate">

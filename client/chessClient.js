@@ -41,7 +41,7 @@ Template.main.helpers({
 
 Template.getGameTemplate.helpers({
   "users": function() {
-    return Sessions.find();
+    return Sessions.find({_id: {$ne: sessionId}});
   }
 });
 
@@ -71,8 +71,6 @@ Template.gameTemplate.helpers({
     str = str.replace(/\n/g, "<br />");
     return str;
   },
-  "myid": function() {return sessionId;},
-  "equals": function(a, b) {return a == b;},
   "roundSeconds" : function(mseconds) {return roundSeconds(mseconds);},
   "countdown": function(time, ctime) {
     Session.set("countdownStart", ctime);
@@ -110,6 +108,18 @@ Meteor.setInterval(
     }
   },
   1000
+);
+
+Template.registerHelper(
+  "myid", function() {return sessionId;}
+);
+
+Template.registerHelper(
+  "equals", function(a, b) {return a == b;}
+);
+
+Template.registerHelper(
+  "equals3", function(a, b, c) {return a == b && b == c;}
 );
 
 Template.gameTemplate.events = {

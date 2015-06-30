@@ -58,7 +58,16 @@ Meteor.methods({
       // console.log("my session id          " + sessionId);
       if(otherSession.offerTo == sessionId) { // yes we have a match, begin play
         // remove all my and other's offers
-       
+        Sessions.update(
+          {offerTo: {$in: [sessionId, otherId]}},
+          {$set: {offerTo: null}},
+          {multi: true}
+        );
+        Sessions.update(
+          {offerFrom: {$in: [sessionId, otherId]}},
+          {$set: {offerFrom: null}},
+          {multi: true}
+        );
         var white, wname, black, bname;
         if(0 == Math.floor(2 * Math.random())) { 
           white = sessionId; 
@@ -244,12 +253,12 @@ var gameEnd = function(game, score) {
   );
 };
 
-// clean up dead sessions after 3 seconds
+// clean up dead sessions after 10 seconds
 Meteor.setInterval(
   function () {
     var now = (new Date()).getTime();
     Sessions.find({
-      "lastSeen": {$lt: (now - 3 * 1000)}
+      "lastSeen": {$lt: (now - 10 * 1000)}
     }).forEach(
       function (session) {
         // deactivate idle session
@@ -258,7 +267,7 @@ Meteor.setInterval(
         Sessions.remove(session._id);
     }); 
   }, // end of setInterval function argument
-  3000
+  5000
 );
 
 

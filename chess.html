@@ -35,12 +35,14 @@
       {{bname}} 
       {{#if equals black turn}}
         {{{countdown btime ctime}}}
-        {{#if equals myid turn}} 
-          <br />
-          <input> {{message}}
-        {{/if}}
       {{else}}
         {{roundSeconds btime}}
+      {{/if}}
+      {{#if equals3 black myid turn}}
+        <br />
+        Type a move in algebraic notation and press enter.
+        <br />
+        <input> {{message}}
       {{/if}}
       <br />
       <code style="font-size:24px">
@@ -50,26 +52,30 @@
       {{wname}} 
       {{#if equals white turn}}
         {{{countdown wtime ctime}}}
-        {{#if equals myid turn}} 
-          <br />
-          <input> {{message}}
-        {{/if}}
       {{else}}
         {{roundSeconds wtime}}
+      {{/if}}
+      {{#if equals3 white myid turn}}
+        <br />
+        Type a move in algebraic notation and press enter.
+        <br />
+        <input> {{message}}
       {{/if}}
       <br />
       <button class="resign">Resign</button>
 </template>
 
 <template name="getGameTemplate">
-  Offer or accept a game.
+  Click on a user name to offer or accept a game. When you offer, the name turns green. When someone offers to you, the name turns red.
+  <br />
+  <br />
   {{#each users}}
     {{>userTemplate}}
   {{/each}}
 </template>
 
 <template name="userTemplate">
-  <li style="color:{{#if offerTo}} red {{else}} {{#if offerFrom}} green {{else}} black {{/if}}{{/if}}">{{user}}</li>
+  <li style="color:{{#if equals myid offerTo}} red {{else}} {{#if equals myid offerFrom}} green {{else}} black {{/if}}{{/if}}">{{user}}</li>
 </template>
 
 <template name="notLoggedInTemplate">

@@ -30,12 +30,11 @@ Accounts.ui.config({
   passwordSignupFields: "USERNAME_ONLY"
 });
 
+Session.set("gameInProgress", false);
+
 Template.main.helpers({
-  "alert": function() {
-    return Session.get("alert");
-  },
   "inGame": function() { // if game is returned, we are in a game
-    return Games.findOne() != null;
+    return Session.get("gameInProgress");
   }
 });
 
@@ -52,6 +51,12 @@ Template.inGameTemplate.helpers({
 });
 
 Template.gameTemplate.helpers({
+  "alert": function() {
+    return Session.get("endMessage");
+  },
+  "notOver": function() {
+    return Session.get("endMessage") == "";
+  },
   "nl2brnbsp": function(str) {
     str = str.replace(/a  b/, "aaaa");
     str = str.replace(/K/g, WK);    
@@ -85,23 +90,16 @@ Session.set("countdownStart", 0);
 Meteor.setInterval(
   function() {
     Meteor.call('heartbeat', sessionId, secretId);
-    if(Session.get("alert")) { // currently processing an alert
-      var alertTime = Session.get("alertTime");
-      alertTime = alertTime - 1;
-      if(alertTime == 0) {
-        Session.set("alert", "");
+    var game = Games.findOne();
+    if(!Session.get("gameInProgress")) {
+      if(game) {
+        Session.set("gameInProgress", true);
       }
-      Session.set("alertTime", alertTime);
-    } else { // not currently processing an alert; look for one incoming
-      var session = Sessions.findOne(sessionId);
-      if(session.alert) {
-        Session.set("alert", session.alert);
-        Session.set("alertTime", 10);
-        Meteor.call("cancelAlert", sessionId);
-      }
+    } else { // game is in progress
+      if(game.endMessage) Session.set("endMessage", game.endMessage);
     }
     var start = Session.get("countdownStart");
-    if(start) {
+    if(start && !game.endMessage) {
       var timePassed = (new Date()).getTime() - start;
       var newMseconds = Session.get("countdownMseconds") - timePassed;
       Session.set("countdownNewMseconds", newMseconds);
@@ -131,8 +129,13 @@ Template.gameTemplate.events = {
       Session.set("countdownNewMseconds", 0);
     }
   },
-  "click button": function(evt, template) {
+  "click .resign": function(evt, template) {
     Meteor.call("resign", sessionId, secretId);
+  },
+  "click .continue": function(evt, template) {
+    Session.set("gameInProgress", false);
+    Session.set("endMessage", "");
+    Meteor.call("closeGame", sessionId, secretId);
   }
 };
 

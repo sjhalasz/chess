@@ -12,8 +12,7 @@
 <!-- this is the root Meteor template for everything -->
 <template name="main">
   {{! calls the login package control for creating account or logging in, and displays user name}}
-  <h1>Welcome to Meteor Chess, {{>loginButtons}}!</h1> 
-  <div style="font-size:24px;color:red">{{alert}}</div>
+  <h2>Welcome to Meteor Chess by Steven J. Halasz, {{>loginButtons}}!</h2> 
   {{#if currentUser}} 
     {{#if inGame}} {{! if in a game, use inGame template}}
       {{>inGameTemplate}}
@@ -32,37 +31,50 @@
 </template>
 
 <template name="gameTemplate">
-      {{bname}} 
-      {{#if equals black turn}}
-        {{{countdown btime ctime}}}
-      {{else}}
-        {{roundSeconds btime}}
-      {{/if}}
-      {{#if equals3 black myid turn}}
-        <br />
-        Type a move in algebraic notation and press enter.
-        <br />
-        <input> {{message}}
-      {{/if}}
-      <br />
-      <code style="font-size:24px">
-      {{{nl2brnbsp ascii}}}
-      </code>
-      <br />
-      {{wname}} 
-      {{#if equals white turn}}
-        {{{countdown wtime ctime}}}
-      {{else}}
-        {{roundSeconds wtime}}
-      {{/if}}
-      {{#if equals3 white myid turn}}
-        <br />
-        Type a move in algebraic notation and press enter.
-        <br />
-        <input> {{message}}
-      {{/if}}
-      <br />
-      <button class="resign">Resign</button>
+  <div style="font-size:24px;color:red">
+    {{#if alert}}
+      {{alert}}
+      <button class="continue">Continue</button>
+    {{/if}}
+  </div>
+  {{bname}} 
+  {{#if equals black turn}}
+    {{{countdown btime ctime}}}
+  {{else}}
+    {{roundSeconds btime}}
+  {{/if}}
+  {{#if equals3 black myid turn}}
+    {{#if notOver}}
+      {{> promptForMove}}
+    {{/if}}
+  {{/if}}
+  <br />
+  <code style="font-size:24px">
+    {{{nl2brnbsp ascii}}}
+  </code>
+  <br />
+  {{wname}} 
+  {{#if equals white turn}}
+    {{{countdown wtime ctime}}}
+  {{else}}
+    {{roundSeconds wtime}}
+  {{/if}}
+  {{#if equals3 white myid turn}}
+    {{#if notOver}}
+      {{> promptForMove}}
+    {{/if}}
+  {{/if}}
+  <br />
+  {{#if notOver}} 
+   <button class="resign">Resign</button>
+  {{/if}}
+</template>
+
+<template name="promptForMove">
+    <br />
+    Type a move in algebraic notation and press enter.
+    <br />
+    <input> {{message}}
 </template>
 
 <template name="getGameTemplate">

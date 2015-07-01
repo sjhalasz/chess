@@ -8,12 +8,9 @@ Meteor.publish("sessions", function() {
 
 Meteor.publish("games", function(sessionId) {
   return Games.find(
-    {$and: [
-      {"active": true}, 
-      {$or: [
-        {"white": sessionId}, 
-        {"black": sessionId}
-      ]}
+    {$or: [
+      {"white": sessionId}, 
+      {"black": sessionId}
     ]}
   );
 });
@@ -83,7 +80,6 @@ Meteor.methods({
         var chess = new Chess();
         chess.header("White", wname, "Black", bname);
         gameId = Games.insert({
-          "active": true,
           "white": white,
           "wname": wname,
           "black": black,
@@ -94,8 +90,7 @@ Meteor.methods({
           "wtime": 1000 * 10 * 60,
           "btime": 1000 * 10 * 60,
           "ctime": (new Date()).getTime(),
-          "moves": [], 
-          "score": ""
+          "moves": []
         });
       } else {
         offerTo = otherId;
@@ -139,21 +134,11 @@ Meteor.methods({
       } else {
         btime = btime - etime
       }
-      var score = "";
-      if(0 > wtime + 1000) { // white time default with 1 second grace period
-        score = "0-1";
-        sendAlert(white, black, "Black wins due to white time default.");
-      }
-      if(0 > btime + 1000) { // black time default with 1 second grace period
-        score = "1-0";
-        sendAlert(white, black, "White wins due to black time default.");
-      }
       wtime = Math.max(60000, wtime);
       btime = Math.max(60000, btime);
-      if(score) {
-          gameEnd(game, score);
-      } else {
         if(chess.move(move)) {
+          var message = "";
+          if(chess.in_check()) message = "Check."
           var moves = game.moves;
           moves.push(move);
           var turn = game.turn == game.white ? game.black : game.white;
@@ -166,7 +151,7 @@ Meteor.methods({
               "wtime": wtime,
               "btime": btime,
               "ctime": ctime,
-              "message": "",
+              "message": message,
               "moves": moves
             }},
             function(err, cnt) {
@@ -178,8 +163,8 @@ Meteor.methods({
             score = "½-½";
             var alert = "Draw due to ";
             if(chess.in_checkmate()) { // side to move is in checkmate
-              score = (turn == white) ? "0-1" : "1-0";
-              alert = ((turn == white) ? "White" : "Black") + " is in checkmate."
+              score = (turn == game.white) ? "0-1" : "1-0";
+              alert = ((turn == game.white) ? "White" : "Black") + " is in checkmate."
             }
             else if(chess.in_stalemate()) {
               alert += "stalemate."
@@ -193,8 +178,7 @@ Meteor.methods({
             else if(chess.in_draw()) { // 50 move rule
               alert += "50 move rule."
             }
-            gameEnd(game, score);
-            sendAlert(white, black, alert);
+            gameEnd(game, score, alert);
           }
         } else { // invalid move
            Games.update(
@@ -205,7 +189,6 @@ Meteor.methods({
            );
            // console.log("message " + "Invalid Move.");
         } // end of if(chess.move
-      } // end of if(score
     } // end of if(session
   },
   "resign": function(sessionId, secretId){
@@ -213,39 +196,37 @@ Meteor.methods({
     if(session && secretId == session.secretId) {
       var game = Games.findOne(session.gameId);
       if(game.turn == game.white) {
-        gameEnd(game, "0-1");
-        sendAlert(game.white, game.black, "White resigns.");
+        gameEnd(game, "0-1", "White resigns.");
       } else {
-        gameEnd(game, "1-0");
-        sendAlert(game.white, game.black, "Black resigns.");
+        gameEnd(game, "1-0", "Black resigns.");
       }
     }
   },
-  "cancelAlert": function(sessionId) {
-    Sessions.update(
-      sessionId,
-      {$set: {alert: ""}}
-    );
+  "closeGame": function(sessionId, secretId) {
+    var session = Sessions.findOne(sessionId);
+    if(session && secretId == session.secretId) {
+      var game = Games.findOne(session.gameId);
+      if(sessionId == game.white) {
+        Games.update(
+          session.gameId,
+          {$set: {white: 0}}
+        );
+      } else {
+        Games.update(
+          session.gameId,
+          {$set: {black: 0}}
+        );
+      }
+    }
   }
 });
 
-var sendAlert = function(sessionId1, sessionId2, message) {
-  Sessions.update(
-    sessionId1,
-    {$set: {alert: message}}
-  );
-  Sessions.update(
-    sessionId2,
-    {$set: {alert: message}}
-  );
-};
-
-var gameEnd = function(game, score) {
+var gameEnd = function(game, score, message) {
   Games.update(
     game._id,
     {$set: {
-      "active": false,
-      "score": score
+      "score": score,
+      "endMessage": message
     }},
     function(err, cnt) {
       // console.log("gameEnd " + cnt);
@@ -253,21 +234,37 @@ var gameEnd = function(game, score) {
   );
 };
 
-// clean up dead sessions after 10 seconds
+// clean up dead sessions after 5 seconds
 Meteor.setInterval(
   function () {
     var now = (new Date()).getTime();
     Sessions.find({
-      "lastSeen": {$lt: (now - 10 * 1000)}
+      "lastSeen": {$lt: (now - 5 * 1000)}
     }).forEach(
       function (session) {
         // deactivate idle session
         // console.log("removing session " + session.secretId);
-        Games.update(session.gameId, {$set: {active: false}});
+        var game = Games.findOne(session.gameId);
+        if(game)
+          gameEnd(game, "", "Opponent's connection was lost.");
         Sessions.remove(session._id);
     }); 
-  }, // end of setInterval function argument
-  5000
+    // check for active games time defaults
+    Games.find({
+      endMessage: {$ne: ""}
+    }).forEach(
+      function (game) {
+        var etime = now - game.ctime // elapsed time since last move
+        if(game.wtime < etime) { // elapsed time is greater than time white has left
+          gameEnd(game, "0-1", "Black wins due to white time default.");
+        }
+        if(game.btime < etime) { // ditto for black
+          gameEnd(game, "1-0", "White wins due to black time default.");
+        }
+    }); 
+
+  }, // end of setInterval function
+  1000
 );
 
 

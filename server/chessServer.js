@@ -3,7 +3,7 @@ Sessions.allow({
 });
 
 Meteor.publish("sessions", function() {
-  return Sessions.find({}, {fields: {"secretId": 0}});
+  return Sessions.find({gameId: null}, {fields: {"secretId": 0}});
 });
 
 Meteor.publish("games", function(sessionId) {
@@ -44,27 +44,10 @@ Meteor.methods({
     user = user ? user.username : "";
     var session = Sessions.findOne(sessionId);
     if(session && secretId == session.secretId) {
-      var gameId = null;
-      var offerTo = null;      
-      var offerFrom = null;
-      var otherSession = Sessions.findOne(otherId);
       // first see if the other user has an offer to me;
       // if so, start the game
-      //var pair = Offers.findOne({"sessionId": otherId, "otherId": sessionId});
-      // console.log("other session offer to " + otherSession.offerTo);
-      // console.log("my session id          " + sessionId);
-      if(otherSession.offerTo == sessionId) { // yes we have a match, begin play
-        // remove all my and other's offers
-        Sessions.update(
-          {offerTo: {$in: [sessionId, otherId]}},
-          {$set: {offerTo: null}},
-          {multi: true}
-        );
-        Sessions.update(
-          {offerFrom: {$in: [sessionId, otherId]}},
-          {$set: {offerFrom: null}},
-          {multi: true}
-        );
+      if(_.contains(session.offerFrom, otherId)) { // yes we have a match, begin play
+        var otherSession = Sessions.findOne(otherId);
         var white, wname, black, bname;
         if(0 == Math.floor(2 * Math.random())) { 
           white = sessionId; 
@@ -78,8 +61,7 @@ Meteor.methods({
           bname = user;
         }
         var chess = new Chess();
-        chess.header("White", wname, "Black", bname);
-        gameId = Games.insert({
+        var gameId = Games.insert({
           "white": white,
           "wname": wname,
           "black": black,
@@ -92,30 +74,53 @@ Meteor.methods({
           "ctime": (new Date()).getTime(),
           "moves": []
         });
-      } else {
-        offerTo = otherId;
-        offerFrom = sessionId;
+        // revoke all offers for both me and other
+        Sessions.update(
+          {},
+          {
+            $pull: {offerFrom: sessionId},
+            $pull: {offerFrom: otherId},
+            $pull: {offerTo: sessionId},
+            $pull: {offerTo: otherId}
+          },
+          {multi:true}
+        );
+        // set game Id and clear all offers from mine and other's session
+        Sessions.update(
+          {_id: {$in: [sessionId, otherId]}},
+          {$set: { 
+            gameId: gameId,
+            offerFrom: [],
+            offerTo: []
+          }},
+          {multi: true}
+        );
+      } else if(_.contains(session.offerTo, otherId)) { // if I already have an offer to this user, revoke it
+        Sessions.update(
+          sessionId,
+          {$pull: {offerTo: otherId}}
+        );
+        Sessions.update(
+          otherId,
+          {$pull: {offerFrom: sessionId}}
+        );
+      } else { // no pairing yet; record new offer
+        
+        Sessions.update(
+          sessionId, 
+          {$push: {offerTo: otherId}},
+          function(err, cnt) {
+            // console.log("set gameid " + cnt);
+          }
+        );
+        Sessions.update(
+          otherId, 
+          {$push: {offerFrom: sessionId}},
+          function(err, cnt) {
+            // console.log("set gameid " + cnt);
+          }
+        );
       }
-      Sessions.update(
-        sessionId, 
-        {$set: {
-          gameId: gameId,
-          offerTo: offerTo
-        }},
-        function(err, cnt) {
-          // console.log("set gameid " + cnt);
-        }
-      );
-      Sessions.update(
-        otherId, 
-        {$set: {
-          gameId: gameId,
-          offerFrom: offerFrom
-        }},
-        function(err, cnt) {
-          // console.log("set gameid " + cnt);
-        }
-      );
     } // end of if
   },
   "move": function(sessionId, secretId, move){
@@ -218,6 +223,11 @@ Meteor.methods({
         );
       }
     }
+    Sessions.update(
+      {gameId: game._id},
+      {$set: {gameId: null}},
+      {multi: true}
+    );
   }
 });
 
@@ -251,7 +261,11 @@ Meteor.setInterval(
     }); 
     // check for active games time defaults
     Games.find({
-      endMessage: {$ne: ""}
+      $and: [
+        {endMessage: {$ne: ""}},
+        {white: {$ne: 0}},
+        {black: {$ne: 0}}
+      ]
     }).forEach(
       function (game) {
         var etime = now - game.ctime // elapsed time since last move

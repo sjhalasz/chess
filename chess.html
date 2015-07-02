@@ -34,14 +34,14 @@
   <div style="font-size:24px;color:red">
     {{#if alert}}
       {{alert}}
-      <button class="continue">Continue</button>
+      <button class="closeGame">Close</button>
     {{/if}}
   </div>
   {{bname}} 
   {{#if equals black turn}}
     {{{countdown btime ctime}}}
   {{else}}
-    {{roundSeconds btime}}
+    {{formatRound btime}}
   {{/if}}
   {{#if equals3 black myid turn}}
     {{#if notOver}}
@@ -57,7 +57,7 @@
   {{#if equals white turn}}
     {{{countdown wtime ctime}}}
   {{else}}
-    {{roundSeconds wtime}}
+    {{formatRound wtime}}
   {{/if}}
   {{#if equals3 white myid turn}}
     {{#if notOver}}
@@ -72,14 +72,22 @@
 
 <template name="promptForMove">
     <br />
-    Type a move in algebraic notation and press enter.
+    Type a move in 
+      <a 
+        href="https://en.wikipedia.org/wiki/Algebraic_notation_%28chess%29" 
+        target="_blank"
+      >
+        algebraic notation
+      </a> 
+    and press enter.
     <br />
     <input> {{message}}
 </template>
 
 <template name="getGameTemplate">
-  Click on a user name to offer or accept a game. When you offer, the name turns green. When someone offers to you, the name turns red.
-  <br />
+  <li>Click on a user name to offer or accept a game.</li> 
+  <li>When you offer, the name turns green, and you can withdraw the offer by clicking again or offering to or accepting from a different user.</li> 
+  <li>When someone offers to you, the name turns red, and you can accept and start a game by clicking.</li>
   <br />
   {{#each users}}
     {{>userTemplate}}
@@ -87,7 +95,7 @@
 </template>
 
 <template name="userTemplate">
-  <li style="color:{{#if equals myid offerTo}} red {{else}} {{#if equals myid offerFrom}} green {{else}} black {{/if}}{{/if}}">{{user}}</li>
+  <li style="color:{{#if in offerTo myid}} red {{else}} {{#if in offerFrom myid}} green {{else}} black {{/if}}{{/if}}">{{user}}</li>
 </template>
 
 <template name="notLoggedInTemplate">

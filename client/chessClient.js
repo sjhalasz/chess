@@ -17,9 +17,8 @@ var secretId = Random.id();
 var sessionId = Sessions.insert({
   "lastSeen": (new Date()).getTime(), 
   secretId: secretId,
-  gameId: null,
-  offerTo: null,
-  offerFrom: null
+  offerTo: [],
+  offerFrom: []
 });
 // console.log("secretId " + secretId);
 Meteor.subscribe("games", sessionId);
@@ -31,6 +30,7 @@ Accounts.ui.config({
 });
 
 Session.set("gameInProgress", false);
+Session.set("endMessage", "");
 
 Template.main.helpers({
   "inGame": function() { // if game is returned, we are in a game
@@ -76,13 +76,13 @@ Template.gameTemplate.helpers({
     str = str.replace(/\n/g, "<br />");
     return str;
   },
-  "roundSeconds" : function(mseconds) {return roundSeconds(mseconds);},
+  "formatRound" : function(mseconds) {return timeFormat(roundSeconds(mseconds));},
   "countdown": function(time, ctime) {
     Session.set("countdownStart", ctime);
     Session.set("countdownMseconds", time);
     var newMseconds = Session.get("countdownNewMseconds");
     if(!newMseconds) newMseconds = time;
-    return roundSeconds(newMseconds);
+    return timeFormat(roundSeconds(newMseconds));
   },
 });
 var roundSeconds = function(mseconds) {return Math.floor(0.001 * (500 + mseconds));};
@@ -120,6 +120,10 @@ Template.registerHelper(
   "equals3", function(a, b, c) {return a == b && b == c;}
 );
 
+Template.registerHelper(
+  "in", function(array, element) {return _.contains(array, element);}
+);
+
 Template.gameTemplate.events = {
   'keypress': function (evt, template) {
     if (evt.which === 13) {
@@ -132,7 +136,7 @@ Template.gameTemplate.events = {
   "click .resign": function(evt, template) {
     Meteor.call("resign", sessionId, secretId);
   },
-  "click .continue": function(evt, template) {
+  "click .closeGame": function(evt, template) {
     Session.set("gameInProgress", false);
     Session.set("endMessage", "");
     Meteor.call("closeGame", sessionId, secretId);
@@ -145,4 +149,17 @@ Template.userTemplate.events({
    }
 });
 
+var timeFormat = function(seconds) {
+  var hrs = ~~(seconds / 3600);
+  var mins = ~~((seconds % 3600) / 60);
+  var secs = seconds % 60;
+
+  // Output like "1:01" or "4:03:59" or "123:03:59"
+  ret = "";
+  if (hrs > 0)
+    ret += hrs + ":" + (mins < 10 ? "0" : "");
+  ret += mins + ":" + (secs < 10 ? "0" : "");
+  ret += secs;
+  return ret;
+};
 

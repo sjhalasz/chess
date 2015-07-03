@@ -133,6 +133,9 @@ Template.gameTemplate.events = {
       Session.set("countdownNewMseconds", 0);
     }
   },
+  "click .draw" : function(evt, template) {
+    Meteor.call("offerDraw", sessionId, secretId);
+  },
   "click .resign": function(evt, template) {
     Meteor.call("resign", sessionId, secretId);
   },

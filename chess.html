@@ -66,6 +66,9 @@
   {{/if}}
   <br />
   {{#if notOver}} 
+   <button class="draw" style="color:{{#if in draw myid}}green{{else}}{{#if draw}}red{{else}}black{{/if}}{{/if}}">
+     Offer Draw
+   </button>
    <button class="resign">Resign</button>
   {{/if}}
 </template>

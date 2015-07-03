@@ -72,7 +72,8 @@ Meteor.methods({
           "wtime": 1000 * 10 * 60,
           "btime": 1000 * 10 * 60,
           "ctime": (new Date()).getTime(),
-          "moves": []
+          "moves": [],
+          "draw": []
         });
         // revoke all offers for both me and other
         Sessions.update(
@@ -196,6 +197,25 @@ Meteor.methods({
         } // end of if(chess.move
     } // end of if(session
   },
+  "offerDraw": function(sessionId, secretId){
+    var session = Sessions.findOne(sessionId);
+    if(session && secretId == session.secretId) {
+      var game = Games.findOne(session.gameId);
+      if(_.contains(game.draw, sessionId)){ // previously offered draw, so now revoke
+        Games.update(
+          game._id,
+          {$pull: {draw: sessionId}}
+        );
+      } else if(game.draw.length == 1) { // other has offered to draw, so draw the game
+        gameEnd(game, "½-½", "Draw by agreement.");
+      } else { // this is first offer to draw
+        Games.update(
+          game._id,
+          {$push: {draw: sessionId}}
+        );
+      }
+    }
+  },
   "resign": function(sessionId, secretId){
     var session = Sessions.findOne(sessionId);
     if(session && secretId == session.secretId) {
@@ -210,24 +230,24 @@ Meteor.methods({
   "closeGame": function(sessionId, secretId) {
     var session = Sessions.findOne(sessionId);
     if(session && secretId == session.secretId) {
+      Sessions.update(
+        sessionId,
+        {$set: {gameId: null}}
+      );
       var game = Games.findOne(session.gameId);
-      if(sessionId == game.white) {
+      if(game && sessionId == game.white) {
         Games.update(
           session.gameId,
           {$set: {white: 0}}
         );
-      } else {
+      }
+      if(game && sessionId == game.black) {
         Games.update(
           session.gameId,
           {$set: {black: 0}}
         );
       }
     }
-    Sessions.update(
-      {gameId: game._id},
-      {$set: {gameId: null}},
-      {multi: true}
-    );
   }
 });
 
